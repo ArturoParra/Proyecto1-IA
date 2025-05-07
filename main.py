@@ -25,6 +25,7 @@ class MainApp:
         self.solution_path = []
         self.current_step = 0
         self.is_solving = False
+        self.selected_algorithm = tk.StringVar(value="BFS")  # Algoritmo seleccionado por defecto
         
         # Crear frames
         self.pantalla1 = tk.Frame(root)
@@ -153,6 +154,81 @@ class MainApp:
         # Si no hay solución
         self.solution_text.config(text="No se encontró solución")
         self.is_solving = False
+
+    def dfs_solve(self):
+        """Soluciona el FrozenLake usando DFS"""
+        if self.is_solving:
+            return
+            
+        self.is_solving = True
+        self.solution_text.config(text="Buscando solución con DFS...")
+        
+        # Ejecutar DFS en un hilo separado para no bloquear la interfaz
+        threading.Thread(target=self._dfs_worker).start()
+
+    def _dfs_worker(self):
+        """Implementa el algoritmo DFS en un hilo separado"""
+        # Reiniciar el entorno
+        self.observation, _ = self.env.reset()
+        self.update_frozen_lake_display()
+        
+        # Estructura del mapa de FrozenLake (4x4 por defecto)
+        desc = self.env.unwrapped.desc
+        nrow, ncol = desc.shape
+        
+        # Diccionario para mapear coordenadas a estados
+        coords_to_state = {}
+        for s in range(nrow * ncol):
+            row, col = s // ncol, s % ncol
+            coords_to_state[(row, col)] = s
+        
+        # Estado inicial y meta
+        start_coords = (0, 0)  # Esquina superior izquierda
+        goal_coords = None
+        
+        # Encontrar la meta (posición de 'G')
+        for i in range(nrow):
+            for j in range(ncol):
+                if desc[i][j] == b'G':
+                    goal_coords = (i, j)
+        
+        if not goal_coords:
+            self.solution_text.config(text="Error: No se encontró la meta")
+            self.is_solving = False
+            return
+        
+        # Direcciones: arriba, derecha, abajo, izquierda
+        actions = [3, 2, 1, 0]  # UP, RIGHT, DOWN, LEFT
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+        
+        # Implementar DFS
+        stack = [(start_coords, [])]  # (posición, camino)
+        visited = set([start_coords])
+        
+        while stack:
+            (row, col), path = stack.pop()
+            
+            # Si llegamos a la meta
+            if (row, col) == goal_coords:
+                self.solution_path = path
+                self.solution_text.config(text=f"Solución encontrada en {len(path)} pasos")
+                self.execute_solution()
+                return
+            
+            # Explorar vecinos
+            for action, (dr, dc) in zip(actions, directions):
+                new_row, new_col = row + dr, col + dc
+                
+                # Verificar límites del mapa
+                if 0 <= new_row < nrow and 0 <= new_col < ncol:
+                    # Verificar que no sea un agujero
+                    if desc[new_row][new_col] != b'H' and (new_row, new_col) not in visited:
+                        visited.add((new_row, new_col))
+                        stack.append(((new_row, new_col), path + [action]))
+        
+        # Si no hay solución
+        self.solution_text.config(text="No se encontró solución")
+        self.is_solving = False
     
     def execute_solution(self):
         """Ejecuta la solución paso a paso"""
@@ -180,23 +256,38 @@ class MainApp:
             sys.exit(0)  # Termina el programa
 
     def create_layout(self):
-        # Botones del frame principal
-        btn1 = ttk.Button(self.main_frame, text="FrozenLake (BFS)", 
-                         command=lambda: self.mostrar_pantalla(self.pantalla1))
-        btn1.pack(pady=10)
+        # Configurar el estilo para botones más grandes
+        style = ttk.Style()
+        style.configure('Big.TButton', font=('Helvetica', 12, 'bold'), padding=10)
+        
+        # Frame central para contener los botones
+        center_frame = tk.Frame(self.main_frame)
+        center_frame.pack(expand=True, fill='both')
+        
+        # Título para el menú principal
+        tk.Label(center_frame, text="Visualizador de Algoritmos de IA", 
+                font=('Helvetica', 16, 'bold')).pack(pady=20)
+        
+        # Botones del frame principal con estilo personalizado
+        btn1 = ttk.Button(center_frame, text="FrozenLake", 
+                        command=lambda: self.mostrar_pantalla(self.pantalla1),
+                        style='Big.TButton', width=25)
+        btn1.pack(pady=15)
 
-        btn2 = ttk.Button(self.main_frame, text="Gráfo de Rumania", 
-                         command=lambda: self.mostrar_pantalla(self.pantalla2))
-        btn2.pack(pady=10)
+        btn2 = ttk.Button(center_frame, text="Gráfo de Rumania", 
+                        command=lambda: self.mostrar_pantalla(self.pantalla2),
+                        style='Big.TButton', width=25)
+        btn2.pack(pady=15)
 
-        btn3 = ttk.Button(self.main_frame, text="Gato Minimax", 
-                         command=lambda: self.mostrar_pantalla(self.pantalla3))
-        btn3.pack(pady=10)
+        btn3 = ttk.Button(center_frame, text="Gato Minimax", 
+                        command=lambda: self.mostrar_pantalla(self.pantalla3),
+                        style='Big.TButton', width=25)
+        btn3.pack(pady=15)
 
         # Mostrar el frame principal inicialmente
         self.main_frame.pack(fill='both', expand=True)
 
-        # Pantalla 1 - FrozenLake con BFS
+        # Pantalla 1 - FrozenLake con BFS y DFS
         frozen_lake_frame = tk.Frame(self.pantalla1)
         frozen_lake_frame.pack(pady=20, fill='both', expand=True)
         
@@ -209,9 +300,12 @@ class MainApp:
         control_frame = tk.Frame(self.pantalla1)
         control_frame.pack(pady=10)
         
-        # Botón para resolver con BFS
-        solve_btn = ttk.Button(control_frame, text="Resolver con BFS", 
-                              command=self.bfs_solve)
+        # Menú desplegable para seleccionar algoritmo
+        algorithm_menu = ttk.OptionMenu(control_frame, self.selected_algorithm, "BFS", "BFS", "DFS")
+        algorithm_menu.pack(pady=5)
+        
+        # Botón para resolver
+        solve_btn = ttk.Button(control_frame, text="Resolver", command=self.solve)
         solve_btn.pack(pady=5)
         
         # Texto de estado
@@ -219,24 +313,28 @@ class MainApp:
         self.solution_text.pack(pady=5)
         
         # Botón para reiniciar
-        reset_btn = ttk.Button(control_frame, text="Reiniciar", 
-                              command=self.initialize_frozen_lake)
+        reset_btn = ttk.Button(control_frame, text="Reiniciar", command=self.initialize_frozen_lake)
         reset_btn.pack(pady=5)
         
         # Botón para volver al menú principal
-        volver_btn = ttk.Button(self.pantalla1, text="Volver al Menú Principal", 
-                              command=lambda: self.mostrar_pantalla(self.main_frame))
+        volver_btn = ttk.Button(self.pantalla1, text="Volver al Menú Principal", command=lambda: self.mostrar_pantalla(self.main_frame))
         volver_btn.pack(pady=10)
 
         # Pantalla 2 - Corregir el botón Volver
         tk.Label(self.pantalla2, text="Gráfo de Rumania").pack(pady=20)
-        tk.Button(self.pantalla2, text="Volver", 
-                command=lambda: self.mostrar_pantalla(self.main_frame)).pack(pady=10)
+        tk.Button(self.pantalla2, text="Volver", command=lambda: self.mostrar_pantalla(self.main_frame)).pack(pady=10)
 
         # Pantalla 3 - Corregir el botón Volver
         tk.Label(self.pantalla3, text="Gato Minimax").pack(pady=20)
-        tk.Button(self.pantalla3, text="Volver", 
-                command=lambda: self.mostrar_pantalla(self.main_frame)).pack(pady=10)
+        tk.Button(self.pantalla3, text="Volver", command=lambda: self.mostrar_pantalla(self.main_frame)).pack(pady=10)
+
+    def solve(self):
+        """Resuelve el problema usando el algoritmo seleccionado"""
+        algorithm = self.selected_algorithm.get()
+        if algorithm == "BFS":
+            self.bfs_solve()
+        elif algorithm == "DFS":
+            self.dfs_solve()
 
 
 if __name__ == "__main__":
