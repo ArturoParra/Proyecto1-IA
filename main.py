@@ -341,13 +341,13 @@ class MainApp:
         # Frame para la selección de algoritmo y nodos
         options_frame = tk.Frame(controls_frame)
         options_frame.pack(side=tk.TOP, fill='x', pady=5)
-        
-        # Dropdown de Algoritmos
+          # Dropdown de Algoritmos
         alg_frame = tk.Frame(options_frame)
         alg_frame.pack(side=tk.LEFT, padx=10)
         tk.Label(alg_frame, text="Algoritmo:").pack(anchor="w")
         opciones = ["A*", "Greedy", "Hill Climbing"]
-        dropdown = ttk.OptionMenu(alg_frame, self.algorithm_GR, self.algorithm_GR.get(), *opciones)
+        self.algorithm_GR.set("A*")  # Establecer el algoritmo por defecto explícitamente
+        dropdown = ttk.OptionMenu(alg_frame, self.algorithm_GR, "A*", *opciones)
         dropdown.pack(fill="x", pady=5)
 
         # Botón para ejecutar
@@ -379,7 +379,7 @@ class MainApp:
         self.create_tictactoe_game()
 
     def solve(self):
-        """Resuelve el problema usando el algoritmo seleccionado"""
+        """Resuelve el problema de Frozen Lake usando el algoritmo seleccionado"""
         algorithm = self.algorithm_FL.get()
         if algorithm == "BFS":
             self.bfs_solve()
@@ -433,7 +433,6 @@ class MainApp:
                 path = self.greedy_algorithm(self.start_node.get(), self.end_node.get())
                 self.visualize_path(path)
             elif algorithm == "Hill Climbing":
-                # Este algoritmo necesitaría heurísticas
                 path = self.hill_climbing_algorithm(self.start_node.get(), self.end_node.get())
                 self.visualize_path(path)
                 
