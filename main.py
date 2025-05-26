@@ -1,9 +1,16 @@
+# Programa: Visualizador de Algoritmos de IA
+# Autor: Parra Rivas Arturo Gabriel
+# Descripción: Aplicación que visualiza diferentes algoritmos de IA:
+#   1. BFS y DFS aplicados al entorno FrozenLake de Gymnasium
+#   2. A*, Greedy y Hill Climbing aplicados al problema del camino más corto en el mapa de Rumania
+#   3. Minimax aplicado al juego de Gato (Tic-Tac-Toe)
+
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import sys
 import math
 import random
-import networkx as nx
+import networkx as nx 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
@@ -13,6 +20,14 @@ from collections import deque
 import threading
 
 class MainApp:
+    """Clase principal de la aplicación
+    
+    Esta clase maneja toda la lógica de la aplicación, incluyendo:
+    - La interfaz gráfica con tkinter
+    - El entorno FrozenLake con algoritmos BFS y DFS
+    - El grafo de Rumania con algoritmos A*, Greedy y Hill Climbing
+    - El juego de Gato (Tic-Tac-Toe) con algoritmo Minimax
+    """
 
     def __init__(self, root):
         self.root = root
@@ -21,15 +36,16 @@ class MainApp:
         self.root.resizable(False, False)
         
         # Inicializar variables para FrozenLake
-        self.env = None
-        self.solution_path = []
-        self.current_step = 0
-        self.is_solving = False
+        self.env = None  # Entorno de Gymnasium para FrozenLake
+        self.solution_path = []  # Almacenará la secuencia de acciones de la solución
+        self.current_step = 0  # Índice del paso actual durante la ejecución de la solución
+        self.is_solving = False  # Bandera para evitar ejecutar múltiples soluciones simultáneamente
         self.algorithm_FL = tk.StringVar(value="BFS")  # Algoritmo seleccionado por defecto para Frozen Lake
 
+        # Inicializar variables para el Grafo de Rumania
         self.algorithm_GR = tk.StringVar(value="A*")  # Algoritmo seleccionado por defecto para el grafo
-        self.graph = nx.Graph()
-        self.pos = None  # Posiciones de los nodos en el grafo
+        self.graph = nx.Graph()  # Grafo de NetworkX para representar el mapa de Rumania
+        self.pos = None  # Posiciones de los nodos en el grafo para visualización
         self.start_node = tk.StringVar(value="Arad")  # Nodo inicial para el algoritmo
         self.end_node = tk.StringVar(value="Bucharest")  # Nodo final para el algoritmo
         
@@ -45,6 +61,11 @@ class MainApp:
         self.load_file()  # Cargar el grafo al iniciar la aplicación
 
     def centrar_ventana(self):
+        """Centra la ventana principal en la pantalla
+        
+        Calcula la posición adecuada para que la ventana aparezca en el centro
+        de la pantalla según las dimensiones de la ventana y la resolución del monitor.
+        """
         self.root.update_idletasks()
         ancho = self.root.winfo_width()
         alto = self.root.winfo_height()
@@ -53,6 +74,15 @@ class MainApp:
         self.root.geometry(f"{ancho}x{alto}+{x}+{y}")
 
     def mostrar_pantalla(self, pantalla):
+        """Cambia entre las diferentes pantallas de la aplicación
+        
+        Oculta todas las pantallas y muestra únicamente la pantalla seleccionada.
+        Si la pantalla seleccionada es FrozenLake y el entorno aún no está inicializado,
+        se inicializa automáticamente.
+        
+        Args:
+            pantalla: El frame de tkinter que se quiere mostrar
+        """
         # Ocultar todas las pantallas incluyendo el main_frame
         for p in (self.pantalla1, self.pantalla2, self.pantalla3, self.main_frame):
             p.pack_forget()
@@ -65,15 +95,24 @@ class MainApp:
             self.initialize_frozen_lake()
 
     def initialize_frozen_lake(self):
-        """Inicializa el entorno FrozenLake"""
-        self.env = gym.make('FrozenLake-v1', render_mode="rgb_array", is_slippery=False)
-        self.observation, info = self.env.reset()
+        """Inicializa el entorno FrozenLake
         
-        # Crear y actualizar la visualización
+        Crea un entorno FrozenLake-v1 con el modo de renderizado rgb_array.
+        El parámetro is_slippery=False hace que el agente se mueva de forma determinista
+        (sin deslizamientos aleatorios en el hielo).
+        """
+        self.env = gym.make('FrozenLake-v1', render_mode="rgb_array", is_slippery=False)
+        self.observation, info = self.env.reset()  # Reinicia el entorno y obtiene el estado inicial
+        
+        # Crear y actualizar la visualización del entorno
         self.update_frozen_lake_display()
         
     def update_frozen_lake_display(self):
-        """Actualiza la visualización del entorno FrozenLake"""
+        """Actualiza la visualización del entorno FrozenLake
+        
+        Obtiene la representación visual del entorno actual y la muestra usando matplotlib.
+        Esta función es llamada después de cada acción para actualizar la interfaz gráfica.
+        """
         if self.env is None:
             return
             
@@ -88,7 +127,12 @@ class MainApp:
         self.frozen_lake_canvas.draw()
         
     def bfs_solve(self):
-        """Soluciona el FrozenLake usando BFS"""
+        """Soluciona el FrozenLake usando BFS (Breadth-First Search)
+        
+        El algoritmo BFS explora el entorno por niveles, examinando primero todos los
+        vecinos inmediatos antes de avanzar al siguiente nivel. Esto garantiza encontrar
+        la solución con el menor número de pasos posible.
+        """
         if self.is_solving:
             return
             
@@ -99,7 +143,16 @@ class MainApp:
         threading.Thread(target=self._bfs_worker).start()
     
     def _bfs_worker(self):
-        """Implementa el algoritmo BFS en un hilo separado"""
+        """Implementa el algoritmo BFS (Breadth-First Search) en un hilo separado
+        
+        Utiliza una cola (FIFO) para explorar los estados del entorno FrozenLake
+        nivel por nivel, garantizando encontrar la solución óptima (camino más corto).
+        El algoritmo funciona de la siguiente manera:
+        1. Inicia en la posición (0,0)
+        2. Explora todos los vecinos válidos (no agujeros y dentro de límites)
+        3. Para cada vecino, almacena la secuencia de acciones para llegar a él
+        4. Continúa explorando por niveles hasta encontrar la meta
+        """
         # Reiniciar el entorno
         self.observation, _ = self.env.reset()
         self.update_frozen_lake_display()
@@ -127,18 +180,16 @@ class MainApp:
         if not goal_coords:
             self.solution_text.config(text="Error: No se encontró la meta")
             self.is_solving = False
-            return
+            return        # Direcciones: arriba, derecha, abajo, izquierda
+        actions = [3, 2, 1, 0]  # UP, RIGHT, DOWN, LEFT en el formato de acciones de gymnasium
+        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]  # Cambios en coordenadas (fila, columna)
         
-        # Direcciones: arriba, derecha, abajo, izquierda
-        actions = [3, 2, 1, 0]  # UP, RIGHT, DOWN, LEFT
-        directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-        
-        # Implementar BFS
-        queue = deque([(start_coords, [])])  # (posición, camino)
-        visited = set([start_coords])
+        # Implementar BFS usando una cola para explorar nivel por nivel
+        queue = deque([(start_coords, [])])  # (posición, camino) - Estructura FIFO
+        visited = set([start_coords])  # Conjunto para evitar ciclos
         
         while queue:
-            (row, col), path = queue.popleft()
+            (row, col), path = queue.popleft()  # Extraer el primer elemento (FIFO)
             
             # Si llegamos a la meta
             if (row, col) == goal_coords:
@@ -147,23 +198,28 @@ class MainApp:
                 self.execute_solution()
                 return
             
-            # Explorar vecinos
+            # Explorar vecinos en las cuatro direcciones posibles
             for action, (dr, dc) in zip(actions, directions):
                 new_row, new_col = row + dr, col + dc
                 
                 # Verificar límites del mapa
                 if 0 <= new_row < nrow and 0 <= new_col < ncol:
-                    # Verificar que no sea un agujero
+                    # Verificar que no sea un agujero y que no haya sido visitado antes
                     if desc[new_row][new_col] != b'H' and (new_row, new_col) not in visited:
-                        visited.add((new_row, new_col))
-                        queue.append(((new_row, new_col), path + [action]))
+                        visited.add((new_row, new_col))  # Marcar como visitado
+                        queue.append(((new_row, new_col), path + [action]))  # Añadir a la cola con el camino actualizado
         
         # Si no hay solución
         self.solution_text.config(text="No se encontró solución")
         self.is_solving = False
 
     def dfs_solve(self):
-        """Soluciona el FrozenLake usando DFS"""
+        """Soluciona el FrozenLake usando DFS (Depth-First Search)
+        
+        El algoritmo DFS explora el entorno en profundidad, siguiendo un camino
+        hasta donde sea posible antes de retroceder. Puede encontrar una solución
+        más rápidamente, pero no garantiza que sea la solución óptima.
+        """
         if self.is_solving:
             return
             
@@ -174,7 +230,17 @@ class MainApp:
         threading.Thread(target=self._dfs_worker).start()
 
     def _dfs_worker(self):
-        """Implementa el algoritmo DFS en un hilo separado"""
+        """Implementa el algoritmo DFS (Depth-First Search) en un hilo separado
+        
+        Utiliza una pila (LIFO) para explorar los estados del entorno FrozenLake
+        priorizando la profundidad sobre la amplitud. A diferencia de BFS, DFS
+        sigue un camino tan lejos como sea posible antes de retroceder.
+        El algoritmo funciona de la siguiente manera:
+        1. Inicia en la posición (0,0)
+        2. Explora un vecino y continúa desde ese punto (profundidad)
+        3. Cuando no puede avanzar más, retrocede y prueba otra dirección
+        4. Continúa hasta encontrar la meta o explorar todo el espacio
+        """
         # Reiniciar el entorno
         self.observation, _ = self.env.reset()
         self.update_frozen_lake_display()
@@ -203,8 +269,7 @@ class MainApp:
             self.solution_text.config(text="Error: No se encontró la meta")
             self.is_solving = False
             return
-        
-        # Direcciones: arriba, derecha, abajo, izquierda
+          # Direcciones: arriba, derecha, abajo, izquierda
         actions = [3, 2, 1, 0]  # UP, RIGHT, DOWN, LEFT
         directions = [(-1, 0), (0, 1), (1, 0), (0, -1)]
         
@@ -213,7 +278,7 @@ class MainApp:
         visited = set([start_coords])
         
         while stack:
-            (row, col), path = stack.pop()
+            (row, col), path = stack.pop()  # Extraer el último elemento (LIFO)
             
             # Si llegamos a la meta
             if (row, col) == goal_coords:
@@ -228,10 +293,10 @@ class MainApp:
                 
                 # Verificar límites del mapa
                 if 0 <= new_row < nrow and 0 <= new_col < ncol:
-                    # Verificar que no sea un agujero
+                    # Verificar que no sea un agujero y que no haya sido visitado antes
                     if desc[new_row][new_col] != b'H' and (new_row, new_col) not in visited:
-                        visited.add((new_row, new_col))
-                        stack.append(((new_row, new_col), path + [action]))
+                        visited.add((new_row, new_col))  # Marcar como visitado
+                        stack.append(((new_row, new_col), path + [action]))  # Añadir a la pila con el camino actualizado
         
         # Si no hay solución
         self.solution_text.config(text="No se encontró solución")
@@ -263,6 +328,16 @@ class MainApp:
             sys.exit(0)  # Termina el programa
 
     def create_layout(self):
+        """Crea la interfaz gráfica de la aplicación
+        
+        Configura todos los elementos visuales de la aplicación, incluyendo:
+        - El menú principal con los tres botones de selección de algoritmo
+        - La pantalla de FrozenLake con sus controles
+        - La pantalla del Grafo de Rumania con sus controles
+        - La pantalla del juego de Gato (Tic Tac Toe)
+        
+        Se definen estilos, se crean widgets y se organizan en frames.
+        """
         # Configurar el estilo para botones más grandes
         style = ttk.Style()
         style.configure('Big.TButton', font=('Helvetica', 12, 'bold'), padding=10)
@@ -379,7 +454,11 @@ class MainApp:
         self.create_tictactoe_game()
 
     def solve(self):
-        """Resuelve el problema de Frozen Lake usando el algoritmo seleccionado"""
+        """Resuelve el problema de Frozen Lake usando el algoritmo seleccionado
+        
+        Obtiene el algoritmo seleccionado en la interfaz (BFS o DFS) y ejecuta
+        la función correspondiente para encontrar la solución al problema.
+        """
         algorithm = self.algorithm_FL.get()
         if algorithm == "BFS":
             self.bfs_solve()
@@ -387,7 +466,12 @@ class MainApp:
             self.dfs_solve()
 
     def load_file(self):
-        """Carga un archivo de texto con la estructura del grafo"""
+        """Carga un archivo de texto con la estructura del grafo de Rumania
+        
+        Lee el archivo 'graforumania.txt' que contiene las conexiones entre ciudades
+        con el formato: 'ciudad_origen ciudad_destino distancia'.
+        Crea el grafo usando NetworkX y calcula las posiciones para su visualización.
+        """
         file_path = "graforumania.txt"
         if file_path:
             self.graph.clear()
@@ -408,7 +492,12 @@ class MainApp:
                 messagebox.showerror("Error", f"No se pudo cargar el archivo: {e}")
 
     def draw_graph(self):
-        """Dibuja el grafo sin rutas resaltadas"""
+        """Dibuja el grafo sin rutas resaltadas
+        
+        Visualiza el grafo de Rumania usando NetworkX y matplotlib.
+        Muestra todas las ciudades como nodos y las conexiones como aristas,
+        etiquetando cada conexión con su distancia.
+        """
         self.ax.clear()
         self.ax.set_xticks([])
         self.ax.set_yticks([])
@@ -423,7 +512,12 @@ class MainApp:
         self.canvas.draw()
 
     def run_algorithm(self):
-        """Ejecuta el algoritmo seleccionado en el grafo"""
+        """Ejecuta el algoritmo seleccionado en el grafo
+        
+        Dependiendo del algoritmo seleccionado (A*, Greedy o Hill Climbing),
+        encuentra un camino entre el nodo inicial y final, y visualiza
+        la ruta encontrada en el grafo.
+        """
         algorithm = self.algorithm_GR.get()
         try:
             if algorithm == "A*":
@@ -443,7 +537,20 @@ class MainApp:
             messagebox.showerror("Error", f"Ocurrió un error al ejecutar el algoritmo: {str(e)}")
 
     def greedy_algorithm(self, start_node, end_node):
-        """Implementación del algoritmo Greedy"""
+        """Implementación del algoritmo Greedy
+        
+        Encuentra un camino desde el nodo inicial hasta el nodo objetivo usando
+        una estrategia voraz, seleccionando siempre el vecino con menor peso.
+        Este algoritmo no garantiza encontrar el camino óptimo, pero suele ser
+        más rápido que A*.
+        
+        Args:
+            start_node: Nodo inicial del camino
+            end_node: Nodo objetivo
+            
+        Returns:
+            Una lista de nodos que representan el camino encontrado
+        """
         visited = set()  # Conjunto de nodos visitados
         path = [start_node]  # Ruta inicial
         current_node = start_node
@@ -469,7 +576,20 @@ class MainApp:
         return path
 
     def hill_climbing_algorithm(self, start_node, end_node):
-        """Implementación sencilla de Hill Climbing con distancia euclidiana como heurística"""
+        """Implementación del algoritmo Hill Climbing
+        
+        Utiliza una estrategia de ascenso de colina simple, eligiendo siempre
+        el vecino que tiene la menor distancia euclidiana al objetivo.
+        Este algoritmo puede quedarse atrapado en óptimos locales, pero es
+        eficiente para problemas con espacios de búsqueda bien formados.
+        
+        Args:
+            start_node: Nodo inicial del camino
+            end_node: Nodo objetivo
+            
+        Returns:
+            Una lista de nodos que representan el camino encontrado
+        """
         # Calcular heurística si no existe (distancia directa a la meta)
         if not hasattr(self, 'heuristics'):
             self.calculate_heuristics(end_node)
@@ -502,7 +622,15 @@ class MainApp:
         return path
         
     def calculate_heuristics(self, goal_node):
-        """Calcula la heurística (distancia euclidiana) para cada nodo hasta el objetivo"""
+        """Calcula la heurística (distancia euclidiana) para cada nodo hasta el objetivo
+        
+        Para cada nodo del grafo, calcula la distancia euclidiana (línea recta)
+        hasta el nodo objetivo. Esta heurística es admisible para A* ya que nunca
+        sobreestima el costo real del camino.
+        
+        Args:
+            goal_node: El nodo objetivo al que se calculará la distancia
+        """
         self.heuristics = {}
         goal_pos = self.pos[goal_node]
         
@@ -513,7 +641,14 @@ class MainApp:
             self.heuristics[node] = dist
 
     def visualize_path(self, path):
-        """Visualiza el camino encontrado en el grafo, resaltado en rojo"""
+        """Visualiza el camino encontrado en el grafo, resaltado en rojo
+        
+        Toma una lista de nodos que forman un camino y los resalta en el grafo
+        para mostrar visualmente la ruta encontrada por el algoritmo.
+        
+        Args:
+            path: Lista de nodos que forman el camino encontrado
+        """
         # Limpiar el grafo
         self.draw_graph()
         
@@ -532,7 +667,16 @@ class MainApp:
         self.canvas.draw()
     
     def create_tictactoe_game(self):
-        """Crea el juego de gato (Tic Tac Toe) con algoritmo Minimax"""
+        """Crea el juego de gato (Tic Tac Toe) con algoritmo Minimax
+        
+        Configura la interfaz gráfica para el juego, incluyendo:
+        - El tablero de 3x3 con botones interactivos
+        - Las variables de estado del juego
+        - Los controles para reiniciar la partida y volver al menú principal
+        
+        El juego enfrenta al jugador humano (X) contra la IA (O) que usa
+        el algoritmo Minimax para tomar decisiones óptimas.
+        """
         # Frame para el juego
         game_frame = tk.Frame(self.pantalla3)
         game_frame.pack(pady=20, fill='both', expand=True)
@@ -579,7 +723,15 @@ class MainApp:
         volver_btn.pack(pady=10)
         
     def make_move(self, row, col):
-        """Realiza un movimiento en el tablero"""
+        """Realiza un movimiento en el tablero de gato
+        
+        Gestiona el movimiento del jugador humano, verifica si el juego ha terminado,
+        y si no, pasa el turno a la IA.
+        
+        Args:
+            row: Fila del tablero (0-2)
+            col: Columna del tablero (0-2)
+        """
         if self.game_over or self.board[row][col] != ' ':
             return
             
@@ -606,7 +758,13 @@ class MainApp:
         self.root.after(500, self.ai_move)
         
     def ai_move(self):
-        """Realiza el movimiento de la IA usando Minimax"""
+        """Realiza el movimiento de la IA usando Minimax
+        
+        Utiliza el algoritmo Minimax para encontrar el mejor movimiento posible,
+        asumiendo que el jugador humano jugará de manera óptima.
+        Evalúa todos los posibles movimientos y selecciona el que maximiza la
+        probabilidad de victoria para la IA.
+        """
         # Encontrar el mejor movimiento usando Minimax
         best_score = float('-inf')
         best_move = None
@@ -642,7 +800,21 @@ class MainApp:
         self.game_status.config(text="Tu turno (X)")
         
     def minimax(self, board, depth, is_maximizing):
-        """Implementación del algoritmo Minimax"""
+        """Implementación del algoritmo Minimax
+        
+        Algoritmo recursivo que simula todos los posibles movimientos del juego
+        para determinar la mejor estrategia. Asigna valores a los estados terminales:
+        1 para victoria de la IA, -1 para victoria del jugador humano, 0 para empate.
+        
+        Args:
+            board: Estado actual del tablero
+            depth: Profundidad actual en el árbol de recursión
+            is_maximizing: Booleano que indica si se está maximizando (turno de la IA)
+                          o minimizando (turno del jugador)
+                          
+        Returns:
+            El valor óptimo del tablero para el jugador actual
+        """
         # Verificar si hay un ganador
         if self.check_winner_board(board, 'O'):
             return 1
@@ -677,7 +849,18 @@ class MainApp:
         return self.check_winner_board(self.board, self.current_player)
         
     def check_winner_board(self, board, player):
-        """Verifica si hay un ganador en un tablero dado"""
+        """Verifica si hay un ganador en un tablero dado
+        
+        Comprueba todas las combinaciones ganadoras posibles (filas, columnas y diagonales)
+        para determinar si el jugador especificado ha ganado.
+        
+        Args:
+            board: El tablero a verificar
+            player: El jugador ('X' o 'O') para el que se busca la victoria
+            
+        Returns:
+            True si el jugador ha ganado, False en caso contrario
+        """
         # Revisar filas
         for i in range(3):
             if board[i][0] == board[i][1] == board[i][2] == player:
@@ -697,11 +880,27 @@ class MainApp:
         return False
         
     def is_board_full(self):
-        """Verifica si el tablero está lleno"""
+        """Verifica si el tablero está lleno
+        
+        Utiliza la función auxiliar is_board_full_board para verificar si
+        todas las celdas del tablero actual están ocupadas.
+        
+        Returns:
+            True si el tablero está lleno, False si hay al menos una celda vacía
+        """
         return self.is_board_full_board(self.board)
         
     def is_board_full_board(self, board):
-        """Verifica si un tablero dado está lleno"""
+        """Verifica si un tablero dado está lleno
+        
+        Recorre todas las celdas del tablero para verificar si hay alguna vacía.
+        
+        Args:
+            board: El tablero a verificar
+            
+        Returns:
+            True si todas las celdas están ocupadas, False en caso contrario
+        """
         for row in board:
             for cell in row:
                 if cell == ' ':
@@ -709,7 +908,11 @@ class MainApp:
         return True
         
     def reset_game(self):
-        """Reinicia el juego de gato"""
+        """Reinicia el juego de gato
+        
+        Restablece el tablero a su estado inicial, limpiando todas las celdas,
+        reiniciando las variables de control y actualizando la interfaz gráfica.
+        """
         self.current_player = 'X'
         self.board = [[' ' for _ in range(3)] for _ in range(3)]
         self.game_over = False

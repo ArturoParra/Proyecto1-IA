@@ -150,13 +150,15 @@ La aplicación está construida con Python usando Tkinter para la interfaz gráf
 - Muestra un mensaje de éxito o error.
 
 #### `greedy_algorithm(self, start_node, end_node)`
-**Descripción**: Implementa el algoritmo voraz (Greedy).
+**Descripción**: Implementa el algoritmo voraz (Greedy) con heurística.
 **Parámetros**:
 - `start_node`: Nodo de inicio.
 - `end_node`: Nodo de destino.
 **Funcionalidad**:
+- Calcula heurísticas si no existen (distancia euclidiana al destino).
 - Comienza en el nodo inicial.
-- En cada paso, elige el vecino no visitado con menor peso.
+- En cada paso, elige el vecino no visitado con la mejor combinación de peso de arista y heurística.
+- La función combina el peso de la arista y la heurística del nodo (f = g + h).
 - Termina cuando llega al nodo destino o cuando no hay más caminos.
 - Retorna el camino encontrado.
 
