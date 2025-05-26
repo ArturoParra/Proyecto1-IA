@@ -311,7 +311,7 @@ class MainApp:
         """Ejecuta el siguiente paso de la solución"""
         if self.current_step < len(self.solution_path):
             action = self.solution_path[self.current_step]
-            observation, reward, terminated, truncated, info = self.env.step(action)
+            #observation, reward, terminated, truncated, info = self.env.step(action)
             self.update_frozen_lake_display()
             
             self.current_step += 1
@@ -578,7 +578,7 @@ class MainApp:
     def hill_climbing_algorithm(self, start_node, end_node):
         """Implementación del algoritmo Hill Climbing
         
-        Utiliza una estrategia de ascenso de colina simple, eligiendo siempre
+        Utiliza una estrategia de escalada simple, eligiendo siempre
         el vecino que tiene la menor distancia euclidiana al objetivo.
         Este algoritmo puede quedarse atrapado en óptimos locales, pero es
         eficiente para problemas con espacios de búsqueda bien formados.
