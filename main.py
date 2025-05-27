@@ -16,6 +16,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import numpy as np
 import time
 import gymnasium as gym
+from gymnasium.envs.toy_text.frozen_lake import generate_random_map
 from collections import deque
 import threading
 
@@ -93,15 +94,16 @@ class MainApp:
         # Si es la pantalla del FrozenLake, inicializar el entorno
         if pantalla == self.pantalla1 and self.env is None:
             self.initialize_frozen_lake()
-
+    
     def initialize_frozen_lake(self):
         """Inicializa el entorno FrozenLake
         
         Crea un entorno FrozenLake-v1 con el modo de renderizado rgb_array.
         El parámetro is_slippery=False hace que el agente se mueva de forma determinista
         (sin deslizamientos aleatorios en el hielo).
+        Utilizamos map_name="8x8" para crear un mapa más grande y variado cada vez.
         """
-        self.env = gym.make('FrozenLake-v1', render_mode="rgb_array", is_slippery=False)
+        self.env = gym.make('FrozenLake-v1', render_mode="rgb_array", is_slippery=False, desc=generate_random_map(size=8), map_name="8x8")
         self.observation, info = self.env.reset()  # Reinicia el entorno y obtiene el estado inicial
         
         # Crear y actualizar la visualización del entorno
@@ -311,7 +313,7 @@ class MainApp:
         """Ejecuta el siguiente paso de la solución"""
         if self.current_step < len(self.solution_path):
             action = self.solution_path[self.current_step]
-            #observation, reward, terminated, truncated, info = self.env.step(action)
+            observation, reward, terminated, truncated, info = self.env.step(action)
             self.update_frozen_lake_display()
             
             self.current_step += 1
@@ -690,6 +692,8 @@ class MainApp:
         self.board = [[' ' for _ in range(3)] for _ in range(3)]
         self.game_over = False
         self.buttons = []
+        self.use_pruning = tk.BooleanVar(value=False)  # Variable para la poda alfa-beta
+        self.last_move_time = 0  # Tiempo que tardó el último movimiento
         
         # Crear el tablero con botones
         board_frame = tk.Frame(game_frame)
@@ -716,6 +720,15 @@ class MainApp:
         reset_btn = ttk.Button(control_frame, text="Reiniciar Juego", 
                              command=self.reset_game)
         reset_btn.pack(side=tk.LEFT, padx=10)
+        
+        # Checkbox para habilitar/deshabilitar poda alfa-beta
+        pruning_check = ttk.Checkbutton(control_frame, text="Usar poda alfa-beta", 
+                                      variable=self.use_pruning)
+        pruning_check.pack(side=tk.LEFT, padx=10)
+        
+        # Etiqueta para mostrar el tiempo de cálculo
+        self.time_label = tk.Label(control_frame, text="Tiempo: 0 ms", font=('Helvetica', 10))
+        self.time_label.pack(side=tk.LEFT, padx=10)
         
         # Botón para volver al menú principal
         volver_btn = ttk.Button(self.pantalla3, text="Volver al Menú Principal", 
@@ -765,20 +778,42 @@ class MainApp:
         Evalúa todos los posibles movimientos y selecciona el que maximiza la
         probabilidad de victoria para la IA.
         """
+        # Iniciar cronómetro para medir el tiempo
+        start_time = time.time()
+        
         # Encontrar el mejor movimiento usando Minimax
         best_score = float('-inf')
         best_move = None
+        
+        # Valores iniciales para alfa-beta si se usa poda
+        alpha = float('-inf')
+        beta = float('inf')
         
         for i in range(3):
             for j in range(3):
                 if self.board[i][j] == ' ':
                     self.board[i][j] = 'O'
-                    score = self.minimax(self.board, 0, False)
+                    
+                    # Decidir si usar poda alfa-beta o minimax regular
+                    if self.use_pruning.get():
+                        score = self.minimax_with_pruning(self.board, 0, False, alpha, beta)
+                    else:
+                        score = self.minimax(self.board, 0, False)
+                        
                     self.board[i][j] = ' '
                     
                     if score > best_score:
                         best_score = score
                         best_move = (i, j)
+                        
+                    # Actualizar alfa si estamos usando poda
+                    if self.use_pruning.get():
+                        alpha = max(alpha, best_score)
+        
+        # Calcular tiempo transcurrido en milisegundos
+        end_time = time.time()
+        self.last_move_time = (end_time - start_time) * 1000  # Convertir a milisegundos
+        self.time_label.config(text=f"Tiempo: {self.last_move_time:.2f} ms")
         
         if best_move:
             row, col = best_move
@@ -842,6 +877,65 @@ class MainApp:
                         score = self.minimax(board, depth + 1, True)
                         board[i][j] = ' '
                         best_score = min(score, best_score)
+            return best_score
+            
+    def minimax_with_pruning(self, board, depth, is_maximizing, alpha, beta):
+        """Implementación del algoritmo Minimax con poda alfa-beta
+        
+        Similar al algoritmo Minimax estándar, pero utiliza la poda alfa-beta
+        para reducir el número de nodos evaluados, mejorando la eficiencia.
+        
+        Args:
+            board: Estado actual del tablero
+            depth: Profundidad actual en el árbol de recursión
+            is_maximizing: Booleano que indica si se está maximizando o minimizando
+            alpha: Mejor valor para el maximizador
+            beta: Mejor valor para el minimizador
+            
+        Returns:
+            El valor óptimo del tablero para el jugador actual
+        """
+        # Verificar si hay un ganador
+        if self.check_winner_board(board, 'O'):
+            return 1
+        elif self.check_winner_board(board, 'X'):
+            return -1
+        elif self.is_board_full_board(board):
+            return 0
+            
+        if is_maximizing:
+            best_score = float('-inf')
+            for i in range(3):
+                for j in range(3):
+                    if board[i][j] == ' ':
+                        board[i][j] = 'O'
+                        score = self.minimax_with_pruning(board, depth + 1, False, alpha, beta)
+                        board[i][j] = ' '
+                        best_score = max(score, best_score)
+                        alpha = max(alpha, best_score)
+                        # Poda beta
+                        if beta <= alpha:
+                            break
+                # Poda alfa adicional entre filas
+                if beta <= alpha:
+                    break
+            return best_score
+        else:
+            best_score = float('inf')
+            for i in range(3):
+                for j in range(3):
+                    if board[i][j] == ' ':
+                        board[i][j] = 'X'
+                        score = self.minimax_with_pruning(board, depth + 1, True, alpha, beta)
+                        board[i][j] = ' '
+                        best_score = min(score, best_score)
+                        beta = min(beta, best_score)
+                        # Poda alfa
+                        if beta <= alpha:
+                            break
+                # Poda beta adicional entre filas
+                if beta <= alpha:
+                    break
             return best_score
             
     def check_winner(self):
@@ -923,6 +1017,7 @@ class MainApp:
                 self.buttons[i][j].config(text=' ')
                 
         self.game_status.config(text="Tu turno (X)")
+        self.time_label.config(text="Tiempo: 0 ms")
 
 if __name__ == "__main__":
     root = tk.Tk()
